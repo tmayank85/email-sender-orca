@@ -15,6 +15,7 @@ Send emails to multiple recipients using BCC.
 ```json
 {
   "senderEmail": "your-email@gmail.com",
+  "senderName": "Your Name",
   "appPassword": "your-app-password",
   "recipients": [
     "recipient1@example.com",
@@ -33,6 +34,8 @@ Send emails to multiple recipients using BCC.
   "message": "Email sent successfully",
   "data": {
     "messageId": "<message-id>",
+    "senderName": "Your Name",
+    "senderEmail": "your-email@gmail.com",
     "recipientCount": 3,
     "timestamp": "2025-08-22T10:30:00.000Z"
   }
@@ -43,7 +46,7 @@ Send emails to multiple recipients using BCC.
 ```json
 {
   "success": false,
-  "message": "All fields are required: senderEmail, appPassword, recipients, subject, template"
+  "message": "All fields are required: senderEmail, senderName, appPassword, recipients, subject, template"
 }
 ```
 
@@ -101,7 +104,9 @@ Get server IP addresses and system information.
 
 1. **App Password**: You need to generate an App Password from your Gmail account settings, not your regular password.
 
-2. **Recipients Limit**: Maximum 25 recipients per request.
+2. **Sender Name**: The sender name will be displayed as "Your Name <your-email@gmail.com>" in the recipient's inbox.
+
+3. **Recipients Limit**: Maximum 25 recipients per request.
 
 3. **BCC Implementation**: All recipients are added to BCC, so they won't see each other's email addresses.
 
@@ -114,6 +119,7 @@ Get server IP addresses and system information.
 ```typescript
 const sendEmail = async (emailData: {
   senderEmail: string;
+  senderName: string;
   appPassword: string;
   recipients: string[];
   subject: string;

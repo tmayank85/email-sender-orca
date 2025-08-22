@@ -54,13 +54,13 @@ const isValidEmail = (email) => {
 // POST /api/send-email - Send bulk emails
 app.post('/api/send-email', async (req, res) => {
   try {
-    const { senderEmail, appPassword, recipients, subject, template } = req.body;
+    const { senderEmail, senderName, appPassword, recipients, subject, template } = req.body;
     
     // Validation
-    if (!senderEmail || !appPassword || !recipients || !subject || !template) {
+    if (!senderEmail || !senderName || !appPassword || !recipients || !subject || !template) {
       return res.status(400).json({
         success: false,
-        message: 'All fields are required: senderEmail, appPassword, recipients, subject, template'
+        message: 'All fields are required: senderEmail, senderName, appPassword, recipients, subject, template'
       });
     }
 
@@ -104,7 +104,7 @@ app.post('/api/send-email', async (req, res) => {
 
     // Prepare email options
     const mailOptions = {
-      from: senderEmail,
+      from: `${senderName} <${senderEmail}>`, // Display name with email
       to: senderEmail, // Send to sender as primary recipient
       bcc: recipients, // All recipients in BCC
       subject: subject,
@@ -119,6 +119,8 @@ app.post('/api/send-email', async (req, res) => {
       message: 'Email sent successfully',
       data: {
         messageId: info.messageId,
+        senderName: senderName,
+        senderEmail: senderEmail,
         recipientCount: recipients.length,
         timestamp: new Date().toISOString()
       }
