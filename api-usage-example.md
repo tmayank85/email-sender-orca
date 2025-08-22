@@ -108,7 +108,7 @@ Get server IP addresses and system information.
 
 3. **Recipients Limit**: Maximum 25 recipients per request.
 
-3. **BCC Implementation**: All recipients are added to BCC, so they won't see each other's email addresses.
+3. **BCC Implementation**: The first recipient gets the email directly, and remaining recipients are added to BCC, so they won't see each other's email addresses.
 
 4. **HTML Support**: The template field supports HTML content.
 

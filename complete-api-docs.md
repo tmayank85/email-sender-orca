@@ -17,7 +17,7 @@ POST /api/send-email
 ```
 
 ### Description
-Send emails to multiple recipients using BCC with sender name display support.
+Send emails to multiple recipients where the first recipient receives the email directly and remaining recipients are added to BCC.
 
 ### Request Body
 ```json
@@ -300,7 +300,8 @@ send_bulk_email(
 
 ### 📧 Email Display
 - Emails will show as: **"Your Name <your-email@gmail.com>"**
-- Recipients won't see each other's email addresses (BCC)
+- First recipient gets the email directly in the "To" field
+- Remaining recipients are in BCC and won't see each other's email addresses
 - HTML templates are fully supported
 
 ### 🚀 Best Practices
