@@ -60,6 +60,43 @@ Check if the service is running.
 }
 ```
 
+### 3. Server Information (GET /api/server-info)
+
+Get server IP addresses and system information.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Server information retrieved successfully",
+  "data": {
+    "hostname": "DESKTOP-ABC123",
+    "platform": "win32",
+    "architecture": "x64",
+    "port": 3000,
+    "networkInterfaces": [
+      {
+        "interface": "Wi-Fi",
+        "address": "192.168.1.100",
+        "netmask": "255.255.255.0"
+      },
+      {
+        "interface": "Ethernet",
+        "address": "192.168.0.50",
+        "netmask": "255.255.255.0"
+      }
+    ],
+    "primaryIP": "192.168.1.100",
+    "urls": {
+      "local": "http://localhost:3000",
+      "network": "http://192.168.1.100:3000"
+    },
+    "uptime": 3600.5,
+    "timestamp": "2025-08-22T10:30:00.000Z"
+  }
+}
+```
+
 ## Important Notes
 
 1. **App Password**: You need to generate an App Password from your Gmail account settings, not your regular password.

@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,6 +9,28 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Helper function to get server IP addresses
+const getServerIPs = () => {
+  const networkInterfaces = os.networkInterfaces();
+  const ips = [];
+  
+  for (const interfaceName in networkInterfaces) {
+    const networkInterface = networkInterfaces[interfaceName];
+    for (const network of networkInterface) {
+      // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+      if (network.family === 'IPv4' && !network.internal) {
+        ips.push({
+          interface: interfaceName,
+          address: network.address,
+          netmask: network.netmask
+        });
+      }
+    }
+  }
+  
+  return ips;
+};
 
 // Helper function to create transporter
 const createTransporter = (senderEmail, appPassword) => {
@@ -136,6 +159,40 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// GET /api/server-info - Get server information including IP addresses
+app.get('/api/server-info', (req, res) => {
+  try {
+    const serverIPs = getServerIPs();
+    const serverInfo = {
+      hostname: os.hostname(),
+      platform: os.platform(),
+      architecture: os.arch(),
+      port: PORT,
+      networkInterfaces: serverIPs,
+      primaryIP: serverIPs.length > 0 ? serverIPs[0].address : 'localhost',
+      urls: {
+        local: `http://localhost:${PORT}`,
+        network: serverIPs.length > 0 ? `http://${serverIPs[0].address}:${PORT}` : `http://localhost:${PORT}`
+      },
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      message: 'Server information retrieved successfully',
+      data: serverInfo
+    });
+  } catch (error) {
+    console.error('Error getting server info:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve server information',
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -155,8 +212,15 @@ app.use((req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Email Service is running on http://localhost:${PORT}`);
+  const serverIPs = getServerIPs();
+  const primaryIP = serverIPs.length > 0 ? serverIPs[0].address : 'localhost';
+  
+  console.log(`Email Service is running on:`);
+  console.log(`  Local:   http://localhost:${PORT}`);
+  console.log(`  Network: http://${primaryIP}:${PORT}`);
+  console.log('');
   console.log('Available endpoints:');
-  console.log('POST   /api/send-email - Send bulk emails via BCC');
-  console.log('GET    /api/health     - Health check');
+  console.log('POST   /api/send-email  - Send bulk emails via BCC');
+  console.log('GET    /api/health      - Health check');
+  console.log('GET    /api/server-info - Get server IP and information');
 });
