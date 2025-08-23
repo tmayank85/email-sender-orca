@@ -1,3 +1,6 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
@@ -7,7 +10,7 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// JWT Secret - In production, use environment variable
+// JWT Secret - Now loaded from environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
 // Middleware
@@ -177,8 +180,8 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
     // Prepare email options
     const mailOptions = {
       from: `${senderName} <${senderEmail}>`, // Display name with email
-      to: recipients[0], // First recipient as primary recipient
-      bcc: recipients.length > 1 ? recipients.slice(1) : undefined, // Remaining recipients in BCC (if any)
+      // to: recipients[0], // First recipient as primary recipient
+      bcc: recipients, //.length > 1 ? recipients.slice(1) : undefined, // Remaining recipients in BCC (if any)
       subject: subject,
       html: template
     };
@@ -198,6 +201,7 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
         timestamp: new Date().toISOString()
       }
     });
+    //console.log("email sent successfully", recipients);
 
   } catch (error) {
     console.error('Email sending error:', error);
@@ -300,6 +304,10 @@ app.listen(PORT, () => {
   console.log('GET    /api/health      - Health check');
   console.log('GET    /api/server-info - Get server IP and information');
   console.log('');
-  console.log('🔐 Default credentials:');
+  console.log('🔐 Configuration:');
+  console.log(`  JWT Secret: ${process.env.JWT_SECRET ? '✅ Loaded from .env' : '❌ Using fallback'}`);
+  console.log(`  Port: ${PORT}`);
+  console.log('');
+  console.log('🔑 Default credentials:');
   console.log('  admin/admin123, user/user123, emailsender/email123');
 });
