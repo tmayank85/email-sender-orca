@@ -2,13 +2,41 @@ const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const os = require('os');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// JWT Secret - In production, use environment variable
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Middleware to verify JWT token
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      message: 'Access denied. No token provided.'
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({
+      success: false,
+      message: 'Invalid token.'
+    });
+  }
+};
 
 // Helper function to get server IP addresses
 const getServerIPs = () => {
@@ -51,8 +79,52 @@ const isValidEmail = (email) => {
 
 // Routes
 
-// POST /api/send-email - Send bulk emails
-app.post('/api/send-email', async (req, res) => {
+// POST /api/login - Generate JWT token
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+
+  // Simple authentication - In production, use proper user authentication
+  const validCredentials = [
+    { username: 'admin', password: 'admin123' },
+    { username: 'user', password: 'user123' },
+    { username: 'emailsender', password: 'email123' }
+  ];
+
+  const user = validCredentials.find(
+    u => u.username === username && u.password === password
+  );
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid username or password'
+    });
+  }
+
+  // Generate JWT token
+  const token = jwt.sign(
+    { 
+      username: user.username,
+      iat: Date.now()
+    },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+
+  res.json({
+    success: true,
+    message: 'Login successful',
+    data: {
+      token: token,
+      username: user.username,
+      expiresIn: '24h',
+      tokenType: 'Bearer'
+    }
+  });
+});
+
+// POST /api/send-email - Send bulk emails (Protected Route)
+app.post('/api/send-email', verifyToken, async (req, res) => {
   try {
     const { senderEmail, senderName, appPassword, recipients, subject, template } = req.body;
     
@@ -122,6 +194,7 @@ app.post('/api/send-email', async (req, res) => {
         senderName: senderName,
         senderEmail: senderEmail,
         recipientCount: recipients.length,
+        sentBy: req.user.username,
         timestamp: new Date().toISOString()
       }
     });
@@ -217,12 +290,16 @@ app.listen(PORT, () => {
   const serverIPs = getServerIPs();
   const primaryIP = serverIPs.length > 0 ? serverIPs[0].address : 'localhost';
   
-  console.log(`Email Service is running on:`);
+  console.log(`🚀 Email Service is running on:`);
   console.log(`  Local:   http://localhost:${PORT}`);
   console.log(`  Network: http://${primaryIP}:${PORT}`);
   console.log('');
-  console.log('Available endpoints:');
-  console.log('POST   /api/send-email  - Send bulk emails via BCC');
+  console.log('📋 Available endpoints:');
+  console.log('POST   /api/login       - Generate JWT token');
+  console.log('POST   /api/send-email  - Send bulk emails via BCC (🔒 Protected)');
   console.log('GET    /api/health      - Health check');
   console.log('GET    /api/server-info - Get server IP and information');
+  console.log('');
+  console.log('🔐 Default credentials:');
+  console.log('  admin/admin123, user/user123, emailsender/email123');
 });

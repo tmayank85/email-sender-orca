@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Service API Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .section { background: #f5f5f5; padding: 15px; margin: 15px 0; border-radius: 5px; }
+        button { background: #007cba; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #005c87; }
+        .success { color: green; }
+        .error { color: red; }
+        textarea { width: 100%; height: 100px; margin: 5px 0; }
+        input { width: 100%; padding: 8px; margin: 5px 0; }
+        .token-display { background: #e7f3ff; padding: 10px; border-radius: 5px; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>🔐 Email Service API Tester</h1>
+    
+    <div class="section">
+        <h2>Step 1: Login</h2>
+        <input type="text" id="username" placeholder="Username (admin)" value="admin">
+        <input type="password" id="password" placeholder="Password (admin123)" value="admin123">
+        <button onclick="login()">🔑 Login</button>
+        <div id="loginResult"></div>
+        <div id="tokenDisplay" class="token-display" style="display: none;">
+            <strong>JWT Token:</strong> <span id="tokenValue"></span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Send Email (Requires Token)</h2>
+        <input type="email" id="senderEmail" placeholder="Sender Email">
+        <input type="text" id="senderName" placeholder="Sender Name" value="Test Sender">
+        <input type="password" id="appPassword" placeholder="Gmail App Password">
+        <textarea id="recipients" placeholder="Recipients (one per line)">test1@example.com
+test2@example.com</textarea>
+        <input type="text" id="subject" placeholder="Email Subject" value="Test Email from API">
+        <textarea id="template" placeholder="HTML Template"><h1>Hello!</h1><p>This is a test email from the JWT-protected API.</p></textarea>
+        <button onclick="sendEmail()">📧 Send Email</button>
+        <div id="emailResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Server Info (Public)</h2>
+        <button onclick="getServerInfo()">🖥️ Get Server Info</button>
+        <div id="serverResult"></div>
+    </div>
+
+    <script>
+        let jwtToken = null;
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    jwtToken = result.data.token;
+                    resultDiv.innerHTML = `<div class="success">✅ Login successful! Welcome ${result.data.username}</div>`;
+                    document.getElementById('tokenValue').textContent = jwtToken;
+                    document.getElementById('tokenDisplay').style.display = 'block';
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function sendEmail() {
+            const resultDiv = document.getElementById('emailResult');
+
+            if (!jwtToken) {
+                resultDiv.innerHTML = `<div class="error">❌ Please login first to get JWT token</div>`;
+                return;
+            }
+
+            const emailData = {
+                senderEmail: document.getElementById('senderEmail').value,
+                senderName: document.getElementById('senderName').value,
+                appPassword: document.getElementById('appPassword').value,
+                recipients: document.getElementById('recipients').value.split('\n').filter(email => email.trim()),
+                subject: document.getElementById('subject').value,
+                template: document.getElementById('template').value
+            };
+
+            try {
+                const response = await fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwtToken}`
+                    },
+                    body: JSON.stringify(emailData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Email sent successfully!<br>
+                            📧 From: ${result.data.senderName} &lt;${result.data.senderEmail}&gt;<br>
+                            👥 Recipients: ${result.data.recipientCount}<br>
+                            👤 Sent by: ${result.data.sentBy}<br>
+                            🆔 Message ID: ${result.data.messageId}
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function getServerInfo() {
+            const resultDiv = document.getElementById('serverResult');
+
+            try {
+                const response = await fetch('/api/server-info');
+                const result = await response.json();
+
+                if (result.success) {
+                    const info = result.data;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Server Info Retrieved<br>
+                            🖥️ Hostname: ${info.hostname}<br>
+                            🌐 Platform: ${info.platform}<br>
+                            📡 Primary IP: ${info.primaryIP}<br>
+                            🔗 Network URL: ${info.urls.network}<br>
+                            ⏱️ Uptime: ${Math.floor(info.uptime)} seconds
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

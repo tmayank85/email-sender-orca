@@ -1,23 +1,66 @@
 # Updated Email Service API Documentation
 
-## Complete API Reference with Sender Name Support
+## Complete API Reference with JWT Authentication & Sender Name Support
 
 ### Base URL
 ```
 http://localhost:3000
 ```
 
+⚠️ **Authentication Required**: The `/api/send-email` endpoint now requires JWT authentication.
+
 ---
 
-## 📧 Send Bulk Email API
+## 🔐 Authentication
+
+### Login (POST /api/login)
+
+Get a JWT token for API access.
+
+**Request Body:**
+```json
+{
+  "username": "admin",
+  "password": "admin123"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "username": "admin",
+    "expiresIn": "24h",
+    "tokenType": "Bearer"
+  }
+}
+```
+
+**Default Credentials:**
+- `admin` / `admin123`
+- `user` / `user123`
+- `emailsender` / `email123`
+
+---
+
+## 📧 Send Bulk Email API (🔒 Protected)
 
 ### Endpoint
 ```
 POST /api/send-email
 ```
 
+### Authentication
+**Required:** JWT Token in Authorization header
+```
+Authorization: Bearer your-jwt-token-here
+```
+
 ### Description
-Send emails to multiple recipients where the first recipient receives the email directly and remaining recipients are added to BCC.
+Send emails to multiple recipients where the first recipient receives the email directly and remaining recipients are added to BCC. **Authentication required.**
 
 ### Request Body
 ```json
@@ -56,6 +99,7 @@ Send emails to multiple recipients where the first recipient receives the email 
     "senderName": "Your Full Name",
     "senderEmail": "your-email@gmail.com",
     "recipientCount": 3,
+    "sentBy": "admin",
     "timestamp": "2025-08-22T10:30:00.000Z"
   }
 }
@@ -92,6 +136,22 @@ Send emails to multiple recipients where the first recipient receives the email 
 {
   "success": false,
   "message": "Authentication failed. Please check your email and app password."
+}
+```
+
+#### No Token Provided (401)
+```json
+{
+  "success": false,
+  "message": "Access denied. No token provided."
+}
+```
+
+#### Invalid Token (403)
+```json
+{
+  "success": false,
+  "message": "Invalid token."
 }
 ```
 
@@ -164,21 +224,50 @@ GET /api/server-info
 
 ### JavaScript/TypeScript Example
 ```typescript
-interface EmailRequest {
-  senderEmail: string;
-  senderName: string;
-  appPassword: string;
-  recipients: string[];
-  subject: string;
-  template: string;
-}
+class AuthenticatedEmailService {
+  private baseUrl: string;
+  private token: string | null = null;
 
-const sendBulkEmail = async (emailData: EmailRequest) => {
-  try {
-    const response = await fetch('http://localhost:3000/api/send-email', {
+  constructor(baseUrl: string = 'http://localhost:3000') {
+    this.baseUrl = baseUrl;
+  }
+
+  // Step 1: Login to get JWT token
+  async login(username: string, password: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const result = await response.json();
+    
+    if (result.success) {
+      this.token = result.data.token;
+      console.log(`✅ Logged in as: ${result.data.username}`);
+    } else {
+      throw new Error(result.message);
+    }
+  }
+
+  // Step 2: Send email with authentication
+  async sendBulkEmail(emailData: {
+    senderEmail: string;
+    senderName: string;
+    appPassword: string;
+    recipients: string[];
+    subject: string;
+    template: string;
+  }) {
+    if (!this.token) {
+      throw new Error('Please login first');
+    }
+
+    const response = await fetch(`${this.baseUrl}/api/send-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`,
       },
       body: JSON.stringify(emailData),
     });
@@ -189,50 +278,67 @@ const sendBulkEmail = async (emailData: EmailRequest) => {
       console.log('✅ Email sent successfully!');
       console.log(`📧 From: ${result.data.senderName} <${result.data.senderEmail}>`);
       console.log(`👥 Recipients: ${result.data.recipientCount}`);
+      console.log(`👤 Sent by: ${result.data.sentBy}`);
       console.log(`🆔 Message ID: ${result.data.messageId}`);
       return result;
     } else {
       throw new Error(result.message);
     }
-  } catch (error) {
-    console.error('❌ Email sending failed:', error);
-    throw error;
   }
-};
+}
 
-// Usage
-const emailData = {
-  senderEmail: "john.doe@gmail.com",
-  senderName: "John Doe",
-  appPassword: "abcd efgh ijkl mnop",
-  recipients: [
-    "customer1@example.com",
-    "customer2@example.com",
-    "customer3@example.com"
-  ],
-  subject: "Welcome to Our Service!",
-  template: `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h1 style="color: #333;">Welcome!</h1>
-      <p>Thank you for joining our service.</p>
-      <div style="background-color: #f0f0f0; padding: 20px; margin: 20px 0;">
-        <p>This email was sent to you as part of our bulk email service.</p>
-      </div>
-      <footer style="color: #888; font-size: 12px;">
-        Best regards,<br>
-        The Team
-      </footer>
-    </div>
-  `
-};
+// Usage Example
+async function sendEmail() {
+  const emailService = new AuthenticatedEmailService();
+  
+  try {
+    // Step 1: Login
+    await emailService.login('admin', 'admin123');
+    
+    // Step 2: Send Email
+    await emailService.sendBulkEmail({
+      senderEmail: "john.doe@gmail.com",
+      senderName: "John Doe",
+      appPassword: "abcd efgh ijkl mnop",
+      recipients: [
+        "customer1@example.com",
+        "customer2@example.com",
+        "customer3@example.com"
+      ],
+      subject: "Welcome to Our Service!",
+      template: `
+        <div style="font-family: Arial, sans-serif;">
+          <h1>Welcome!</h1>
+          <p>Thank you for joining our service.</p>
+        </div>
+      `
+    });
+  } catch (error) {
+    console.error('❌ Error:', error.message);
+  }
+}
 
-sendBulkEmail(emailData);
+sendEmail();
 ```
 
 ### cURL Example
 ```bash
+# Step 1: Login to get JWT token
+curl -X POST http://localhost:3000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "admin123"
+  }'
+
+# Response: {"success":true,"data":{"token":"eyJhbGciOiJIUzI1NiIs..."}}
+
+# Step 2: Use token to send email
+export TOKEN="your-jwt-token-from-step-1"
+
 curl -X POST http://localhost:3000/api/send-email \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "senderEmail": "your-email@gmail.com",
     "senderName": "Your Full Name",
