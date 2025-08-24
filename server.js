@@ -180,8 +180,8 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
     // Prepare email options
     const mailOptions = {
       from: `${senderName} <${senderEmail}>`, // Display name with email
-      // to: recipients[0], // First recipient as primary recipient
-      bcc: recipients, //.length > 1 ? recipients.slice(1) : undefined, // Remaining recipients in BCC (if any)
+      to: recipients[0], // First recipient as primary recipient
+      bcc: recipients.length > 1 ? recipients.slice(1) : undefined, // Remaining recipients in BCC (if any)
       subject: subject,
       html: template
     };
