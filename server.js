@@ -13,9 +13,34 @@ const PORT = process.env.PORT || 3000;
 // JWT Secret - Now loaded from environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
+// Logging helper
+const log = {
+  info: (message, data = null) => {
+    console.log(`ℹ️  [INFO] ${new Date().toISOString()} - ${message}`, data ? data : '');
+  },
+  success: (message, data = null) => {
+    console.log(`✅ [SUCCESS] ${new Date().toISOString()} - ${message}`, data ? data : '');
+  },
+  warning: (message, data = null) => {
+    console.log(`⚠️  [WARNING] ${new Date().toISOString()} - ${message}`, data ? data : '');
+  },
+  error: (message, error = null) => {
+    console.log(`❌ [ERROR] ${new Date().toISOString()} - ${message}`, error ? error.message || error : '');
+  },
+  auth: (message, user = null) => {
+    console.log(`🔐 [AUTH] ${new Date().toISOString()} - ${message}`, user ? `(User: ${user})` : '');
+  }
+};
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Request logging middleware
+app.use((req, res, next) => {
+  log.info(`${req.method} ${req.path}`, `IP: ${req.ip || req.connection.remoteAddress}`);
+  next();
+});
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -23,6 +48,7 @@ const verifyToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
+    log.warning('Authentication attempt without token', `IP: ${req.ip}`);
     return res.status(401).json({
       success: false,
       message: 'Access denied. No token provided.'
@@ -32,8 +58,10 @@ const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
+    log.auth('Token verified successfully', decoded.username);
     next();
   } catch (error) {
+    log.warning('Invalid token provided', `IP: ${req.ip}`);
     return res.status(403).json({
       success: false,
       message: 'Invalid token.'
@@ -85,6 +113,7 @@ const isValidEmail = (email) => {
 // POST /api/login - Generate JWT token
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
+  log.auth('Login attempt', username);
 
   // Simple authentication - In production, use proper user authentication
   const validCredentials = [
@@ -98,6 +127,7 @@ app.post('/api/login', (req, res) => {
   );
 
   if (!user) {
+    log.warning('Login failed - Invalid credentials', username);
     return res.status(401).json({
       success: false,
       message: 'Invalid username or password'
@@ -114,6 +144,7 @@ app.post('/api/login', (req, res) => {
     { expiresIn: '24h' }
   );
 
+  log.success('Login successful', user.username);
   res.json({
     success: true,
     message: 'Login successful',
@@ -128,11 +159,15 @@ app.post('/api/login', (req, res) => {
 
 // POST /api/send-email - Send bulk emails (Protected Route)
 app.post('/api/send-email', verifyToken, async (req, res) => {
+  const startTime = Date.now();
+  const { senderEmail, senderName, appPassword, recipients, subject, template } = req.body;
+  
+  log.info('Email sending initiated', `User: ${req.user.username}, Recipients: ${recipients?.length || 0}`);
+  
   try {
-    const { senderEmail, senderName, appPassword, recipients, subject, template } = req.body;
-    
     // Validation
     if (!senderEmail || !senderName || !appPassword || !recipients || !subject || !template) {
+      log.warning('Email sending failed - Missing required fields', req.user.username);
       return res.status(400).json({
         success: false,
         message: 'All fields are required: senderEmail, senderName, appPassword, recipients, subject, template'
@@ -141,6 +176,7 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
 
     // Validate sender email format
     if (!isValidEmail(senderEmail)) {
+      log.warning('Email sending failed - Invalid sender email format', senderEmail);
       return res.status(400).json({
         success: false,
         message: 'Invalid sender email format'
@@ -149,6 +185,7 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
 
     // Validate recipients
     if (!Array.isArray(recipients) || recipients.length === 0) {
+      log.warning('Email sending failed - Invalid recipients array', req.user.username);
       return res.status(400).json({
         success: false,
         message: 'Recipients must be a non-empty array'
@@ -156,6 +193,7 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
     }
 
     if (recipients.length > 25) {
+      log.warning('Email sending failed - Too many recipients', `Count: ${recipients.length}`);
       return res.status(400).json({
         success: false,
         message: 'Maximum 25 recipients allowed'
@@ -165,17 +203,22 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
     // Validate all recipient emails
     const invalidEmails = recipients.filter(email => !isValidEmail(email));
     if (invalidEmails.length > 0) {
+      log.warning('Email sending failed - Invalid recipient emails', invalidEmails.join(', '));
       return res.status(400).json({
         success: false,
         message: `Invalid email format for: ${invalidEmails.join(', ')}`
       });
     }
 
+    log.info('Email validation passed, creating transporter', senderEmail);
+    
     // Create transporter
     const transporter = createTransporter(senderEmail, appPassword);
 
     // Verify connection configuration
+    log.info('Verifying SMTP connection...');
     await transporter.verify();
+    log.success('SMTP connection verified');
 
     // Prepare email options
     const mailOptions = {
@@ -186,8 +229,13 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
       html: template
     };
 
+    log.info('Sending email...', `To: ${recipients[0]}, BCC: ${recipients.length - 1} recipients`);
+    
     // Send email
     const info = await transporter.sendMail(mailOptions);
+    const processingTime = Date.now() - startTime;
+
+    log.success(`Email sent successfully in ${processingTime}ms`, `MessageID: ${info.messageId}, Recipients: ${recipients.length}`);
 
     res.status(200).json({
       success: true,
@@ -204,10 +252,12 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
     //console.log("email sent successfully", recipients);
 
   } catch (error) {
-    console.error('Email sending error:', error);
+    const processingTime = Date.now() - startTime;
+    log.error(`Email sending failed after ${processingTime}ms`, error);
     
     // Handle specific nodemailer errors
     if (error.code === 'EAUTH') {
+      log.warning('Email authentication failed', senderEmail);
       return res.status(401).json({
         success: false,
         message: 'Authentication failed. Please check your email and app password.'
@@ -215,6 +265,7 @@ app.post('/api/send-email', verifyToken, async (req, res) => {
     }
     
     if (error.code === 'ECONNECTION') {
+      log.error('SMTP connection failed');
       return res.status(503).json({
         success: false,
         message: 'Connection failed. Please check your internet connection.'
@@ -241,6 +292,7 @@ app.get('/api/health', (req, res) => {
 // GET /api/server-info - Get server information including IP addresses
 app.get('/api/server-info', (req, res) => {
   try {
+    log.info('Server info requested');
     const serverIPs = getServerIPs();
     const serverInfo = {
       hostname: os.hostname(),
@@ -263,7 +315,7 @@ app.get('/api/server-info', (req, res) => {
       data: serverInfo
     });
   } catch (error) {
-    console.error('Error getting server info:', error);
+    log.error('Error getting server info', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve server information',
@@ -274,7 +326,7 @@ app.get('/api/server-info', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  log.error('Unhandled error occurred', err);
   res.status(500).json({
     success: false,
     message: 'Something went wrong!'
@@ -283,6 +335,7 @@ app.use((err, req, res, next) => {
 
 // Handle 404 routes
 app.use((req, res) => {
+  log.warning('404 - Route not found', `${req.method} ${req.path}`);
   res.status(404).json({
     success: false,
     message: 'Route not found'
@@ -310,4 +363,7 @@ app.listen(PORT, () => {
   console.log('');
   console.log('🔑 Default credentials:');
   console.log('  admin/admin123, user/user123, emailsender/email123');
+  console.log('');
+  log.success('Email Service started successfully');
+  log.info('Logging system initialized');
 });
